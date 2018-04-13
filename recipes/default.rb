@@ -48,7 +48,8 @@ end
   package pkg
 end
 
-[node['reprepro']['repo_dir'], node['reprepro']['incoming']].each do |dir|
+# Create the base_repo_dir to host the rest of repositories
+[node['reprepro']['base_repo_dir']].each do |dir|
   directory dir do
     owner 'nobody'
     group 'nogroup'
@@ -57,32 +58,69 @@ end
   end
 end
 
-%w(conf db dists pool tarballs).each do |dir|
-  directory "#{node['reprepro']['repo_dir']}/#{dir}" do
+node['reprepro']['repositories_directories'].each do |dir|
+  repo_full_path = "#{node['reprepro']['base_repo_dir']}/#{dir}"
+  directory repo_full_path  do
     owner 'nobody'
     group 'nogroup'
     mode '0755'
+    recursive true
   end
-end
 
-%w(distributions incoming pulls).each do |conf|
-  template "#{node['reprepro']['repo_dir']}/conf/#{conf}" do
-    source "#{conf}.erb"
-    mode '0644'
+  # incoming directories
+  node['reprepro']['incoming']].each do |incoming_dir|
+  directory "#{repo_full_path}/#{incoming_dir}" do
     owner 'nobody'
     group 'nogroup'
-    variables(
-      allow: node['reprepro']['allow'],
-      codenames: node['reprepro']['codenames'],
-      architectures: node['reprepro']['architectures'],
-      incoming: node['reprepro']['incoming'],
-      pulls: node['reprepro']['pulls']
-    )
+    mode '0755'
+    recursive true
   end
+
+  %w(conf db dists pool tarballs).each do |conf_dir|
+    directory "#{repo_full_path}/#{conf_dir}" do
+      owner 'nobody'
+      group 'nogroup'
+      mode '0755'
+    end
+
+  %w(distributions incoming pulls).each do |conf|
+    template "#{repo_full_path}/conf/#{conf}" do
+      source "#{conf}.erb"
+      mode '0644'
+      owner 'nobody'
+      group 'nogroup'
+      variables(
+        allow: node['reprepro']['allow'],
+        codenames: node['reprepro']['codenames'],
+        architectures: node['reprepro']['architectures'],
+        incoming: node['reprepro']['incoming'],
+        pulls: node['reprepro']['pulls']
+      )
+    end
+  end
+
+  if node['reprepro']['enable_repository_on_host']
+    execute "apt-key add #{pgp_key}" do
+      action :nothing
+      if apt_repo
+        subscribes :run, "template[#{pgp_key}]", :immediately
+      else
+        subscribes :run, "file[#{pgp_key}]", :immediately
+      end
+    end
+
+    apt_repository 'reprepro' do
+      uri "file://#{repo_full_path}"
+      distribution node['lsb']['codename']
+      components ['main']
+    end
+end
+
 end
 
 if apt_repo
-  pgp_key = "#{apt_repo['repo_dir']}/#{node['reprepro']['pgp_email']}.gpg.key"
+  # TODO: migrate to base_repo_dir when using data_bags
+  pgp_key = "#{apt_repo['base_repo_dir']}/#{node['reprepro']['pgp_email']}.gpg.key"
 
   execute 'import packaging key' do
     command "/bin/echo -e '#{apt_repo['pgp']['private']}' | gpg --import -"
@@ -115,29 +153,17 @@ else
     group 'nogroup'
   end
 
-  execute "reprepro -Vb #{node['reprepro']['repo_dir']} export" do
-    action :nothing
-    subscribes :run, "file[#{pgp_key}]", :immediately
-    environment 'GNUPGHOME' => node['reprepro']['gnupg_home']
-  end
-end
+  # Iterate over the list of repositories
+  [node['reprepro']['base_repo_dir']].each do |dir|
+    repo_full_path = "#{node['reprepro']['base_repo_dir']}/#{dir}"
 
-if node['reprepro']['enable_repository_on_host']
-  execute "apt-key add #{pgp_key}" do
-    action :nothing
-    if apt_repo
-      subscribes :run, "template[#{pgp_key}]", :immediately
-    else
+    execute "reprepro -Vb #{repo_full_path}/#{dir} export" do
+      action :nothing
       subscribes :run, "file[#{pgp_key}]", :immediately
+      environment 'GNUPGHOME' => node['reprepro']['gnupg_home']
     end
-  end
-
-  apt_repository 'reprepro' do
-    uri "file://#{node['reprepro']['repo_dir']}"
-    distribution node['lsb']['codename']
-    components ['main']
-  end
 end
+
 
 begin
   include_recipe "reprepro::#{node['reprepro']['server']}"

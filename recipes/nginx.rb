@@ -28,7 +28,7 @@ template "#{node['nginx']['dir']}/sites-available/apt_repo" do
   owner 'root'
   group 'root'
   variables(
-    repo_dir: node['reprepro']['repo_dir']
+    repo_dir: node['reprepro']['base_repo_dir']
   )
   notifies :reload, 'service[nginx]'
 end

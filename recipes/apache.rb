@@ -26,7 +26,7 @@ template "#{node['apache']['dir']}/sites-available/apt_repo.conf" do
   source 'apt_repo.conf.erb'
   mode '0644'
   variables(
-    repo_dir: node['reprepro']['repo_dir']
+    repo_dir: node['reprepro']['base_repo_dir']
   )
 end
 
