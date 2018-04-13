@@ -60,6 +60,7 @@ end
 
 node['reprepro']['repositories_directories'].each do |dir|
   repo_full_path = "#{node['reprepro']['base_repo_dir']}/#{dir}"
+
   directory repo_full_path  do
     owner 'nobody'
     group 'nogroup'
@@ -68,8 +69,7 @@ node['reprepro']['repositories_directories'].each do |dir|
   end
 
   # incoming directories
-  node['reprepro']['incoming']].each do |incoming_dir|
-  directory "#{repo_full_path}/#{incoming_dir}" do
+  directory "#{repo_full_path}/#{node['reprepro']['incoming']}" do
     owner 'nobody'
     group 'nogroup'
     mode '0755'
@@ -82,6 +82,7 @@ node['reprepro']['repositories_directories'].each do |dir|
       group 'nogroup'
       mode '0755'
     end
+  end
 
   %w(distributions incoming pulls).each do |conf|
     template "#{repo_full_path}/conf/#{conf}" do
@@ -114,8 +115,7 @@ node['reprepro']['repositories_directories'].each do |dir|
       distribution node['lsb']['codename']
       components ['main']
     end
-end
-
+  end
 end
 
 if apt_repo
@@ -140,7 +140,7 @@ if apt_repo
     )
   end
 else
-  pgp_key = "#{node['reprepro']['repo_dir']}/#{node['gpg']['name']['email']}.gpg.key"
+  pgp_key = "#{node['reprepro']['base_repo_dir']}/#{node['gpg']['name']['email']}.gpg.key"
   node.default['reprepro']['pgp_email'] = node['gpg']['name']['email']
 
   execute "sudo -u #{node['gpg']['user']} -i gpg --armor --export #{node['gpg']['name']['real']} > #{pgp_key}" do
@@ -154,14 +154,15 @@ else
   end
 
   # Iterate over the list of repositories
-  [node['reprepro']['base_repo_dir']].each do |dir|
+  [node['reprepro']['repositories_directories']].each do |dir|
     repo_full_path = "#{node['reprepro']['base_repo_dir']}/#{dir}"
 
-    execute "reprepro -Vb #{repo_full_path}/#{dir} export" do
+    execute "reprepro -Vb #{repo_full_path} export" do
       action :nothing
       subscribes :run, "file[#{pgp_key}]", :immediately
       environment 'GNUPGHOME' => node['reprepro']['gnupg_home']
     end
+  end
 end
 
 
