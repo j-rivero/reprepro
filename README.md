@@ -19,4 +19,5 @@ that it can be only included once so it is not possible to call it several times
 
 * Fix the support for Apache. Only work nginx at this moment
 * Limitation to support Debian/UBuntu using repo name
-
+* Fix support for data bags
+* Update data bag example
