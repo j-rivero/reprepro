@@ -84,6 +84,15 @@ node['reprepro']['repositories_directories'].each do |dir|
     end
   end
 
+  # Detect Ubuntu or Debian codenames and get the appropiate
+  if dir.include? "debian"
+    codenames = node.default['reprepro']['codenames']['debian']
+  else if dir.include? "ubuntu"
+    codenames = node.default['reprepro']['codenames']['ubuntu']
+  else
+    Chef::Log.fatal('The repo name has no debian or ubuntu prefix in the name')
+    raise
+
   %w(distributions incoming pulls).each do |conf|
     template "#{repo_full_path}/conf/#{conf}" do
       source "#{conf}.erb"
